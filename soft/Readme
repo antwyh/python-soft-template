@@ -1,0 +1,148 @@
+#===============>star.py
+import sys,os
+BASE_DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+from core import src
+
+if __name__ == '__main__':
+    src.run()
+#===============>settings.py
+import os
+
+BASE_DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH=os.path.join(BASE_DIR,'db','db.json')
+LOG_PATH=os.path.join(BASE_DIR,'log','access.log')
+LOGIN_TIMEOUT=5
+
+"""
+logging配置
+"""
+# 定义三种日志输出格式
+standard_format = '[%(asctime)s][%(threadName)s:%(thread)d][task_id:%(name)s][%(filename)s:%(lineno)d]' \
+                  '[%(levelname)s][%(message)s]' #其中name为getlogger指定的名字
+simple_format = '[%(levelname)s][%(asctime)s][%(filename)s:%(lineno)d]%(message)s'
+id_simple_format = '[%(levelname)s][%(asctime)s] %(message)s'
+
+# log配置字典
+LOGGING_DIC = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': standard_format
+        },
+        'simple': {
+            'format': simple_format
+        },
+    },
+    'filters': {},
+    'handlers': {
+        #打印到终端的日志
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',  # 打印到屏幕
+            'formatter': 'simple'
+        },
+        #打印到文件的日志,收集info及以上的日志
+        'default': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',  # 保存到文件
+            'formatter': 'standard',
+            'filename': LOG_PATH,  # 日志文件
+            'maxBytes': 1024*1024*5,  # 日志大小 5M
+            'backupCount': 5,
+            'encoding': 'utf-8',  # 日志文件的编码，再也不用担心中文log乱码了
+        },
+    },
+    'loggers': {
+        #logging.getLogger(__name__)拿到的logger配置
+        '': {
+            'handlers': ['default', 'console'],  # 这里把上面定义的两个handler都加上，即log数据既写入文件又打印到屏幕
+            'level': 'DEBUG',
+            'propagate': True,  # 向上（更高level的logger）传递
+        },
+    },
+}
+
+
+#===============>src.py
+from conf import settings
+from lib import common
+import time
+
+logger=common.get_logger(__name__)
+
+current_user={'user':None,'login_time':None,'timeout':int(settings.LOGIN_TIMEOUT)}
+def auth(func):
+    def wrapper(*args,**kwargs):
+        if current_user['user']:
+            interval=time.time()-current_user['login_time']
+            if interval < current_user['timeout']:
+                return func(*args,**kwargs)
+        name = input('name>>: ')
+        password = input('password>>: ')
+        db=common.conn_db()
+        if db.get(name):
+            if password == db.get(name).get('password'):
+                logger.info('登录成功')
+                current_user['user']=name
+                current_user['login_time']=time.time()
+                return func(*args,**kwargs)
+        else:
+            logger.error('用户名不存在')
+
+    return wrapper
+
+@auth
+def buy():
+    print('buy...')
+
+@auth
+def run():
+
+    print('''
+购物
+查看余额
+转账
+    ''')
+    while True:
+        choice = input('>>: ').strip()
+        if not choice:continue
+        if choice == '1':
+            buy()
+
+
+
+#===============>db.json
+{"egon": {"password": "123", "money": 3000}, "alex": {"password": "alex3714", "money": 30000}, "wsb": {"password": "3714", "money": 20000}}
+
+#===============>common.py
+from conf import settings
+import logging
+import logging.config
+import json
+
+def get_logger(name):
+    logging.config.dictConfig(settings.LOGGING_DIC)  # 导入上面定义的logging配置
+    logger = logging.getLogger(name)  # 生成一个log实例
+    return logger
+
+
+def conn_db():
+    db_path=settings.DB_PATH
+    dic=json.load(open(db_path,'r',encoding='utf-8'))
+    return dic
+
+
+#===============>access.log
+[2017-10-21 19:08:20,285][MainThread:10900][task_id:core.src][src.py:19][INFO][登录成功]
+[2017-10-21 19:08:32,206][MainThread:10900][task_id:core.src][src.py:19][INFO][登录成功]
+[2017-10-21 19:08:37,166][MainThread:10900][task_id:core.src][src.py:24][ERROR][用户名不存在]
+[2017-10-21 19:08:39,535][MainThread:10900][task_id:core.src][src.py:24][ERROR][用户名不存在]
+[2017-10-21 19:08:40,797][MainThread:10900][task_id:core.src][src.py:24][ERROR][用户名不存在]
+[2017-10-21 19:08:47,093][MainThread:10900][task_id:core.src][src.py:24][ERROR][用户名不存在]
+[2017-10-21 19:09:01,997][MainThread:10900][task_id:core.src][src.py:19][INFO][登录成功]
+[2017-10-21 19:09:05,781][MainThread:10900][task_id:core.src][src.py:24][ERROR][用户名不存在]
+[2017-10-21 19:09:29,878][MainThread:8812][task_id:core.src][src.py:19][INFO][登录成功]
+[2017-10-21 19:09:54,117][MainThread:9884][task_id:core.src][src.py:19][INFO][登录成功]
